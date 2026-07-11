@@ -31,6 +31,14 @@ def fetch_all_pages(endpoint, num_pages):
     return all_movies
 
 
+def fetch_genre_list():
+    url = f"{BASE_URL}/genre/movie/list"
+    params = {"api_key": TMDB_API_KEY}
+    response = requests.get(url, params=params, timeout=10)
+    response.raise_for_status()
+    return response.json()  # {"genres": [{"id": 28, "name": "Action"}, ...]}
+
+
 def load_to_bronze(conn, endpoint, movies_with_pages):
     with conn.cursor() as cur:
         rows = [
@@ -48,15 +56,30 @@ def load_to_bronze(conn, endpoint, movies_with_pages):
     conn.commit()
 
 
+def load_genres_to_bronze(conn, genre_payload):
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO bronze.genre_raw (raw_payload) VALUES (%s)",
+            (Json(genre_payload),),
+        )
+    conn.commit()
+
+
 def main():
     endpoint = "movie/popular"
     movies_with_pages = fetch_all_pages(endpoint, NUM_PAGES)
     print(f"Total movies fetched: {len(movies_with_pages)}")
 
+    genre_payload = fetch_genre_list()
+    print(f"Fetched genre list - {len(genre_payload.get('genres', []))} genres")
+
     conn = psycopg2.connect(DATABASE_URL)
     try:
         load_to_bronze(conn, endpoint, movies_with_pages)
         print(f"Loaded {len(movies_with_pages)} rows into bronze.movie_raw")
+
+        load_genres_to_bronze(conn, genre_payload)
+        print("Loaded genre list into bronze.genre_raw")
     finally:
         conn.close()
 
