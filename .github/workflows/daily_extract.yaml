@@ -21,8 +21,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run extraction script
+      - name: Run extraction script (Bronze)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
         run: python extraction/extract_load.py
+
+      - name: Run transform script (Silver)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python transformation/transform_load.py
