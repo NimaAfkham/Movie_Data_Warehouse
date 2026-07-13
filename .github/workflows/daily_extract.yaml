@@ -2,8 +2,8 @@ name: Daily Movie Data Extraction
 
 on:
   schedule:
-    - cron: "0 6 * * *" # runs daily at 6:00 AM UTC
-  workflow_dispatch: # lets you trigger it manually too, for testing
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 jobs:
   extract-and-load:
@@ -31,3 +31,10 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python transformation/transform_load.py
+
+      - name: Send Telegram digest
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+        run: python telegram_bot/daily_digest.py
