@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS silver.movie (
     original_title TEXT,
     original_language TEXT,
     release_date DATE,
-    overview TEXT
+    overview TEXT,
+    poster_path TEXT
 );
 
 -- Genre lookup

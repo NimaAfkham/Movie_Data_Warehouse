@@ -4,18 +4,24 @@ import psycopg2
 
 DATABASE_URL = os.environ["DATABASE_URL"]
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-TELEGRAM_CHANNEL_ID = os.environ["TELEGRAM_CHANNEL_ID"]  
+TELEGRAM_CHANNEL_ID = os.environ["TELEGRAM_CHANNEL_ID"]  # e.g. "@moviewarehouse_digest"
 
-TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+TELEGRAM_SEND_PHOTO_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+TELEGRAM_SEND_MESSAGE_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
+
+CAPTION_MAX_LEN = 1024  # Telegram's hard limit for photo captions
+OVERVIEW_SNIPPET_LEN = 160
 
 
 def get_top_trending(conn, limit=5):
-    """Top N movies by popularity on the most recent snapshot date."""
+    """Top N movies by popularity on the most recent snapshot date,
+    including poster path and overview for the #1 movie."""
     query = """
         WITH latest_date AS (
             SELECT MAX(snapshot_date) AS d FROM gold.fact_movie_snapshot
         )
-        SELECT m.title, f.popularity
+        SELECT m.title, f.popularity, m.poster_path, m.overview
         FROM gold.fact_movie_snapshot f
         JOIN gold.dim_movie m ON f.movie_id = m.movie_id
         JOIN latest_date ld ON f.snapshot_date = ld.d
@@ -80,11 +86,24 @@ def get_top_genre(conn):
         return cur.fetchone()
 
 
-def build_message(trending, movers, top_genre):
-    lines = ["🎬 <b>Today's Movie Digest</b>\n"]
+def truncate(text, max_len):
+    if not text:
+        return ""
+    if len(text) <= max_len:
+        return text
+    return text[:max_len].rsplit(" ", 1)[0] + "…"
 
-    lines.append("<b>🔥 Trending Now</b>")
-    for i, (title, popularity) in enumerate(trending, start=1):
+
+def build_caption(trending, movers, top_genre):
+    top_title, top_popularity, _, top_overview = trending[0]
+
+    lines = ["🎬 <b>Today's Movie Digest</b>\n"]
+    lines.append(f"<b>#1 Trending:</b> {top_title}")
+    if top_overview:
+        lines.append(f"<i>{truncate(top_overview, OVERVIEW_SNIPPET_LEN)}</i>")
+
+    lines.append("\n<b>🔥 Also Trending</b>")
+    for i, (title, popularity, _, _) in enumerate(trending[1:], start=2):
         lines.append(f"{i}. {title} ({popularity:.1f})")
 
     if movers:
@@ -96,16 +115,31 @@ def build_message(trending, movers, top_genre):
         genre_name, avg_pop = top_genre
         lines.append(f"\n<b>🏆 Top Genre Today:</b> {genre_name} (avg popularity {avg_pop})")
 
-    return "\n".join(lines)
+    caption = "\n".join(lines)
+    return truncate(caption, CAPTION_MAX_LEN)
 
 
-def send_to_telegram(message):
+def send_photo_digest(caption, poster_path):
+    photo_url = f"{TMDB_IMAGE_BASE}{poster_path}"
     payload = {
         "chat_id": TELEGRAM_CHANNEL_ID,
-        "text": message,
+        "photo": photo_url,
+        "caption": caption,
         "parse_mode": "HTML",
     }
-    response = requests.post(TELEGRAM_API_URL, json=payload, timeout=10)
+    response = requests.post(TELEGRAM_SEND_PHOTO_URL, json=payload, timeout=15)
+    response.raise_for_status()
+    return response.json()
+
+
+def send_text_digest(caption):
+    """Fallback if the #1 movie has no poster available."""
+    payload = {
+        "chat_id": TELEGRAM_CHANNEL_ID,
+        "text": caption,
+        "parse_mode": "HTML",
+    }
+    response = requests.post(TELEGRAM_SEND_MESSAGE_URL, json=payload, timeout=10)
     response.raise_for_status()
     return response.json()
 
@@ -119,10 +153,16 @@ def main():
     finally:
         conn.close()
 
-    message = build_message(trending, movers, top_genre)
-    print(message)  # also visible in the GitHub Actions log for debugging
+    caption = build_caption(trending, movers, top_genre)
+    print(caption)  # also visible in the GitHub Actions log for debugging
 
-    result = send_to_telegram(message)
+    top_poster_path = trending[0][2]
+    if top_poster_path:
+        result = send_photo_digest(caption, top_poster_path)
+    else:
+        print("No poster available for #1 movie, falling back to text message")
+        result = send_text_digest(caption)
+
     print(f"Sent to Telegram. Message ID: {result['result']['message_id']}")
 
 

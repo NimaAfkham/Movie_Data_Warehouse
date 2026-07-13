@@ -16,7 +16,8 @@ SELECT
     original_title,
     original_language,
     release_date,
-    overview
+    overview,
+    poster_path
 FROM silver.movie;
 
 CREATE OR REPLACE VIEW gold.dim_genre AS

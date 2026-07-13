@@ -87,6 +87,7 @@ def upsert_movies(conn, movie_master):
             payload.get("original_language"),
             release_date,
             payload.get("overview"),
+            payload.get("poster_path"),
         ))
     if not rows:
         return 0
@@ -95,14 +96,15 @@ def upsert_movies(conn, movie_master):
             cur,
             """
             INSERT INTO silver.movie
-                (movie_id, title, original_title, original_language, release_date, overview)
+                (movie_id, title, original_title, original_language, release_date, overview, poster_path)
             VALUES %s
             ON CONFLICT (movie_id) DO UPDATE
                 SET title = EXCLUDED.title,
                     original_title = EXCLUDED.original_title,
                     original_language = EXCLUDED.original_language,
                     release_date = EXCLUDED.release_date,
-                    overview = EXCLUDED.overview
+                    overview = EXCLUDED.overview,
+                    poster_path = EXCLUDED.poster_path
             """,
             rows,
         )
