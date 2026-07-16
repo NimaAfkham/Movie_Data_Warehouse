@@ -14,7 +14,7 @@ NUM_PAGES = 25  # 25 pages x 20 movies/page = ~500 movies per run
 def fetch_page(endpoint, page):
     url = f"{BASE_URL}/{endpoint}"
     params = {"api_key": TMDB_API_KEY, "page": page}
-    response = requests.get(url, params=params, timeout=10)
+    response = requests.get(url, params=params, timeout=30)
     response.raise_for_status()
     return response.json()
 
@@ -34,7 +34,7 @@ def fetch_all_pages(endpoint, num_pages):
 def fetch_genre_list():
     url = f"{BASE_URL}/genre/movie/list"
     params = {"api_key": TMDB_API_KEY}
-    response = requests.get(url, params=params, timeout=10)
+    response = requests.get(url, params=params, timeout=30)
     response.raise_for_status()
     return response.json()  # {"genres": [{"id": 28, "name": "Action"}, ...]}
 
